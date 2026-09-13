@@ -9,7 +9,7 @@ measure tracking against annotated targets.
 ## Start here
 
 The verified local environment uses Python 3.13. Commands below run from the repository root. The pinned
-dependencies match the local environment used for the cleanup checks; other
+dependencies match the local environment used for the validation checks; other
 platforms and accelerator builds have not been verified.
 
 ```sh

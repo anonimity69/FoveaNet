@@ -3,7 +3,7 @@
 Run scripts and notebooks from the repository root. The loaders expect local
 files beneath `data/`, which is ignored by Git. Download and redistribution terms
 belong to the dataset publishers. The links below are those used in the project;
-their present availability has not been checked as part of this cleanup.
+their present availability has not been verified.
 
 ```text
 data/

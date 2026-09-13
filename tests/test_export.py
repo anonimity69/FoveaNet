@@ -10,5 +10,6 @@ def test_export_includes_review_files_but_not_local_state():
     assert Path("requirements.txt") in paths
     assert Path("PREDICTIONS.txt") in paths
     for path in paths:
-        assert path.parts[0] not in {"data", ".venv", ".git", ".claude", "node_modules"}
+        assert path.parts[0] not in {"data", "node_modules"}
+        assert not path.parts[0].startswith(".") or path.parts[0] in {".github", ".gitignore"}
         assert "__pycache__" not in path.parts

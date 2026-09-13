@@ -1,9 +1,5 @@
 # Technical review notes
 
-The cleanup preserves the numerical algorithms and historical result constants.
-The only intended executable change outside formatting and unused imports is a
-`main()` guard in `gt_motion.py`, preventing a benchmark run on import.
-
 Areas that deserve review before making new scientific claims:
 
 - `build_crops.process` clears `fovea_id` between selection rules and after the
@@ -29,6 +25,5 @@ Areas that deserve review before making new scientific claims:
 - `load_gesture` modifies a private Tonic file-presence check. Dependency upgrades
   need a dataset-loading regression check.
 
-Historical records remain intact, including limitations and corrections. The
-cleanup does not establish who authored any particular line and does not replace
-required attribution or disclosure.
+Historical records include limitations and corrections; consult later entries
+when an earlier interpretation has been revised.

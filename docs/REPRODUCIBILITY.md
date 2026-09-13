@@ -55,6 +55,6 @@ experiments, rather than as the default benchmark implementation.
 
 The log files and prediction record preserve the research chronology, including
 withdrawn interpretations. Figure and notebook constants are summaries of those
-runs. Source cleanup, lint checks and synthetic tests do not reproduce the full
+runs. Lint checks and synthetic tests do not reproduce the full
 multi-seed training experiments. Keep command lines, environment versions,
 dataset splits and raw metrics with any new results.

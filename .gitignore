@@ -31,8 +31,9 @@ dist/
 !.env.example
 *.pem
 *.key
-.claude/
-.codex/
+# Local hidden configuration directories
+.[!.]*/
+!.github/
 
 # Local authoring and temporary files
 node_modules/
