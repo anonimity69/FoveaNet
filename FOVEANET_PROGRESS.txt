@@ -1,0 +1,1041 @@
+================================================================================
+FOVEANET - DETAILED RECORD OF WORK
+Updated 11 August 2026
+================================================================================
+
+An itemised record across five notebooks on DVS128 Gesture, POKER-DVS and the
+DVS benchmark recordings. Part A covers the five points from the latest weekly
+review and is the current work. Part B is the earlier record, kept because the
+results it describes are the foundation everything else sits on.
+
+Points are numbered so they can be referred to directly.
+
+CONTENTS
+  PART A - THE FIVE REVIEW POINTS
+   A1. Frame length                                          done
+   A2. VOT event-based tracking                              done, negative
+   A3. POKER-DVS and the cards                               done, partial
+   A4. Evaluating the model                                  done, see A5
+   A5. DVS benchmark, and the reversal it produced           done
+   A6. Converting datasets into Tonic                        done
+   A7. Corrections made
+   A8. How the model is evaluated: the test set
+   A9. The official test set, and the claim it withdrew
+  A10. This week's three points
+  A11. Relative overlap, and the appearance model          done, negative
+  A12. How much to keep, and the diagnostic on outcomes    done
+  A13. The ablation that removed the title                 done, negative
+  A14. The periphery, and the first positive result        done, POSITIVE
+
+  PART B - EARLIER WORK
+   B1. Dataset and infrastructure
+   B2. Notebook 01, frame clustering and saliency
+   B3. Multi-recording validation
+   B4. Notebook 02, tracking
+   B5. Notebook 03, saliency maps and persistence
+   B6. Deliverables, open questions and scope
+
+
+================================================================================
+PART A - THE FIVE REVIEW POINTS
+================================================================================
+
+--------------------------------------------------------------------------------
+A1. FRAME LENGTH                                    notebook 03, section 8
+--------------------------------------------------------------------------------
+The sweep that chose 50 ms was obsolete: it fitted a fresh mixture per frame and
+selected by size, so it said nothing about a model that carries the mixture
+forward and selects by persistence. Redone properly, with dwell in seconds and
+jitter in pixels per millisecond, since windows of different lengths cannot
+otherwise be compared at all.
+
+A1.1  FRAME LENGTH IS SET BY THE MODEL, NOT CHOSEN FREELY. Three limits bracket
+      it, two of them properties of the model rather than the data:
+        - the fit needs events. At 1 ms a frame holds about 43 events, roughly
+          14 per component, and concentration collapses from 18.5 at 5 ms to
+          5.1 at 1 ms.
+        - the compute must fit inside the window. A warm fit costs about 1 ms,
+          so at a 1 ms window the real-time ratio is 0.9 and the system is
+          already behind. A cold fit falls behind below 10 ms.
+        - long windows blur motion. Concentration falls from 29.0 at 10 ms to
+          22.4 at 100 ms as the component stretches over the swept path.
+
+A1.2  SHORT FRAMES EXIST ONLY BECAUSE THE MIXTURE IS WARM-STARTED.
+
+        window   warm dwell   cold dwell   cold frames dropped
+          1 ms      0.43 s       0.00 s          45%
+          5 ms      0.23 s       0.01 s           4%
+         20 ms      0.81 s       0.04 s           0%
+        100 ms      1.27 s       0.17 s           0%
+
+      The advantage widens as the window shrinks: about 7x at 100 ms, 20x at
+      5 to 20 ms, unbounded at 1 and 2 ms where cold dwell is zero. At 1 ms a
+      per-frame fit changes fovea identity 563 times a second.
+
+A1.3  Two quality measures disagree about the optimum, which is why the notebook
+      reports a range rather than a number. Concentration peaks at 10 ms; dwell
+      rises to 75 ms. Short window, tight box on a wandering fovea; long window,
+      steady fovea in a loose box.
+
+A1.4  The usable range is 10 to 50 ms. Which end to pick was left to a task
+      measurement, and A4 settled it at 10 ms.
+
+A1.5  Confirmed independently on POKER-DVS, where the subject moves about ten
+      times faster. At 10 ms the fovea holds 0.23 s and switches on 4 percent of
+      frames; at 33 and 50 ms it switches on about a quarter. The window should
+      follow the speed of the subject rather than being a fixed constant.
+
+
+--------------------------------------------------------------------------------
+A2. VOT EVENT-BASED TRACKING                        notebook 04, sections 2-4
+--------------------------------------------------------------------------------
+Downloaded from Zenodo, MD5 verified: 60 VOT Challenge 2015 sequences and 67
+TrackingDataset sequences, both with per-frame ground-truth boxes already mapped
+into sensor coordinates. These are the first ground truth the project has had,
+which is also what made A4 possible.
+
+A2.1  THE MODEL DOES NOT TRACK THESE SEQUENCES.
+
+        dataset            events in GT   chosen IoU   oracle IoU   succ>0.5
+        VOT (10 seqs)            6%          0.023        0.084        0%
+        TrackingDataset (10)    12%          0.054        0.133        1%
+
+A2.2  THE ORACLE COLUMN IS WHAT MAKES THIS CONCLUSIVE. Oracle IoU scores the
+      best of all k components rather than the one the rule chose. At about 0.1
+      the mixture never places any component on the annotated target, so no
+      selection rule, no value of k and no amount of hysteresis could recover
+      it. This is not a tuning failure.
+
+A2.3  Two causes, both properties of how the benchmark was built.
+        - The recordings are videos played on a monitor and filmed with a DAVIS
+          camera, so the entire frame emits events continuously. NOTE, CORRECTED
+          IN A10.4: this was first written as "the 60 Hz refresh dominates the
+          recordings". Measured properly the refresh modulation is only 1.13 to
+          1.78 times the mean, and annotated targets are usually MORE event-dense
+          than the scene average. The refresh is real but secondary; the dominant
+          cause is that VOT sequences contain moving backgrounds and camera
+          motion by design.
+        - VOT is a supervised single-object benchmark where the target is
+          whatever a human annotated. The fovea is unsupervised and bottom-up.
+          Scoring one against the other measures the mismatch as much as the
+          method.
+
+A2.4  The obvious remedy was tried and ruled out. Tonic's Denoise transform
+      removes 45 percent of the events and leaves the overlap slightly worse,
+      because it discards spatially isolated events while a display refresh is
+      correlated across the whole frame. Fixing these recordings needs a
+      temporal filter for the 30 and 60 Hz components, a separate piece of work.
+
+A2.5  The fair VOT protocol was also tried: initialise from the first
+      ground-truth box, as every VOT tracker does. Mean overlap rose from 0.042
+      to 0.069, still far from usable, so it does not change the conclusion.
+
+
+--------------------------------------------------------------------------------
+A3. POKER-DVS AND THE CARDS                         notebook 04, sections 5-7
+--------------------------------------------------------------------------------
+A3.1  TONIC'S POKER-DVS IS BOTH DEAD AND THE WRONG VERSION. Its download host no
+      longer resolves, and what it would have provided is the 131 pip symbols
+      already tracked and cropped to 32x32 by the authors' Matlab scripts, so
+      the tracking problem is solved before the data is handed over. The
+      original 128x128 recordings were fetched from the IMSE-CNM lab page
+      instead, and a reader for jAER AEDAT-2.0 written for them.
+
+A3.2  It is the right kind of data: a real deck riffled in front of a real
+      sensor, no screen involved. Its spectrum peaks at 6.8 Hz with nothing near
+      60 Hz, the direct contrast with A2.3, confirming that artifact belongs to
+      how the benchmark was made rather than to event cameras.
+
+A3.3  THE FOVEA CAPTURES CARDS, NOT PIPS. The fovea lands on each card as it
+      crosses, but the box spans a whole card or several pips rather than one
+      symbol. Capture divided by box fraction is about 2 here against roughly 18
+      on gestures.
+
+A3.4  Raising k does not fix it, and not tidily: the box covers 19 percent of
+      the sensor at k=2, 6 percent at k=5, 34 percent at k=12. The k=5 row is
+      also where the mixture becomes unreliable, producing a usable box on only
+      61 frames against 113 to 147 elsewhere, so its tight box comes from
+      discarding half the recording. No value of k isolates a pip while staying
+      stable.
+
+A3.5  The reason is that a card is not a compact blob of activity. It is a large
+      flat surface whose edges and printed symbols all fire as it sweeps past,
+      so the densest persistent region is the card itself.
+
+
+--------------------------------------------------------------------------------
+A4. EVALUATING THE MODEL                            notebook 05
+--------------------------------------------------------------------------------
+The strongest result the project has produced, and stronger than expected.
+
+Every earlier measurement described how the fovea behaves. None said whether the
+region it keeps is the useful one, and none compared it against the obvious
+alternative of cropping the middle of the sensor and hoping. This does both, by
+reducing all 1077 recordings five ways and training the same classifier on each.
+
+A4.1  DESIGN. Five conditions, each an identical (8 bins, 2 polarities, 32, 32)
+      tensor, so no condition is given more numbers than another:
+        full          whole sensor, downsampled, the no-reduction ceiling
+        persistence   crop follows the fovea, accumulated persistence rule
+        persdens      crop follows the fovea, persistence per unit area
+        centre        fixed central box, same median size as the fovea box
+        random        same-size box in a fixed random place
+      Split by subject, holding out 6 of 23 people, because mixing a person's
+      recordings across train and test lets the network recognise the person
+      rather than the gesture. Network deliberately small, 71k parameters: this
+      is a test of the input, not a bid for a good classifier.
+
+A4.2  RESULTS.
+
+        condition       50 ms    10 ms   change
+        full            0.701    0.709   +0.008
+        persistence     0.686    0.731   +0.045
+        persdens        0.688    0.708   +0.020
+        centre          0.354    0.366   +0.012
+        random          0.250    0.229   -0.021
+
+      Chance is 0.091. Median fovea box is 22 x 17 px, 2.3 percent of the
+      sensor, for the persistence rule.
+
+A4.3  WITHDRAWN. This section previously read "at 10 ms the fovea beats the
+      entire sensor", on the strength of 8 seeds. It was measured on a test set
+      carved out of the training subjects. On the dataset's official test
+      subjects the effect disappears (see A9). The measurement below is left in
+      place because the withdrawal is the point.
+
+      On the improvised test set, 8 seeds:
+
+        persistence  0.7314  sd 0.0081
+        full         0.7091  sd 0.0123
+        persdens     0.7082  sd 0.0110
+
+        persistence - full      +0.0223   4.3 standard errors
+        persistence - persdens  +0.0232   4.8 standard errors
+        persdens    - full      -0.0009   0.2 standard errors
+
+      Every one of the eight fovea runs landed above the full-frame mean, which
+      is why this looked solid. Seed stability turned out to say nothing about
+      stability under a change of evaluation data.
+
+A4.4  Interpretation, stated as interpretation rather than measurement: the crop
+      removes background the network would otherwise learn to ignore, and
+      re-centres the subject so the eight time bins are spatially registered
+      instead of showing a hand that drifted. Isolating the two would need a
+      re-centred-but-uncropped condition, which has not been run.
+
+A4.5  PLACEMENT IS WHAT DOES THE WORK. The centre baseline has the same crop
+      size, the same tensor shape and the same network, and reaches 0.366
+      against the fovea's 0.731. The gap is about where the box goes and the
+      fact that it moves, not about how much was kept.
+
+A4.6  THE FRAME LENGTH AND THE RULE HAD TO BE SETTLED TOGETHER. At 50 ms the two
+      fovea rules are indistinguishable and an earlier version of the notebook
+      concluded the choice was free. At 10 ms they separate at 4.8 standard
+      errors. Resolving them one at a time gave the wrong answer.
+      Current recommended configuration: plain persistence at a 10 ms window.
+
+A4.7  Caveats. 73 percent on eleven-class DVS128 Gesture is not competitive;
+      published models reach the mid-nineties. That is intended, since the
+      network is tiny, the input is 32x32 with eight bins and there is no
+      augmentation, and the test set is our own held-out subjects rather than
+      the official one (see A8). Only two windows were run through the
+      classifier, so the optimum is somewhere in 5 to 20 ms and unlocated.
+
+A4.9  READ THIS RESULT TOGETHER WITH A5 AND A9. Everything above is DVS128 Gesture: a
+      single centred person in front of a fixed camera. Repeating the identical
+      comparison on UCF-50 reversed the ordering completely. The claim that
+      survives both is narrower than the one this section alone would support,
+      and is stated in A5.6.
+
+
+--------------------------------------------------------------------------------
+A5. DVS BENCHMARK, AND THE REVERSAL IT PRODUCED     notebook 05, section 5
+--------------------------------------------------------------------------------
+A5.1  POINTS A2 AND A5 ARE THE SAME DATASET. The paper fnins-10-00405 is Hu,
+      Liu, Pfeiffer and Delbruck (2016), and the VOT Challenge 2015 event
+      recordings are one of its four parts. The others are TrackingDataset,
+      UCF-50 and Caltech-256.
+
+A5.2  THE TRACKING HALF IS BENCHMARKED AND DOCUMENTED, across both VOT and
+      TrackingDataset, 127 sequences. See A2. Negative, and the cause is
+      understood.
+
+A5.3  THE CLASSIFICATION HALF IS NOW RUN. UCF-50 downloaded, 17.2 GB, MD5
+      verified after surviving three dropped connections. 6681 recordings across
+      50 action classes on a 240x180 sensor. A 12-class, 40-clips-each subset
+      was put through the identical five-way comparison from A4, at the same
+      10 ms window with the same network.
+
+A5.4  THE ORDERING REVERSES.
+
+        condition       DVSGesture   UCF-50
+        full               0.709      0.698
+        persistence        0.731      0.526
+        persdens           0.708      0.543
+        centre             0.366      0.589
+        random             0.229      0.450
+
+        UCF-50, in standard errors of the difference
+          full        - centre        +0.109    7.4 se
+          centre      - persistence   +0.063    4.5 se
+          persistence - random        +0.076    6.9 se
+
+      The full frame wins, and the fovea is beaten by the trivial centre crop.
+      It still clears a random box by 6.9 standard errors, so it is finding
+      something, just not the right thing.
+
+A5.5  TWO CAUSES, AND THE DATA SEPARATES THEM.
+        - The task needs context. The full frame beats every crop regardless of
+          where it is placed, so part of the loss is that a two-percent box
+          cannot hold enough of a diving or cycling scene to identify it. That
+          applies to any cropping method and is not specific to the fovea.
+        - Saliency is misled by the recording. The centre crop beating the fovea
+          is a separate failure, caused by the 60 Hz display refresh putting
+          events across the whole frame. "Where is activity sustained" stops
+          discriminating when the answer is everywhere, and the centre is a
+          better prior anyway because video is shot with the subject centred.
+          This is the same artifact as A2.3, doing a different kind of damage.
+
+A5.6  WHAT THE TWO DATASETS TOGETHER LICENSE.
+        Defensible: a persistence-driven fovea is a better input than the full
+        sensor WHEN ACTIVITY IS SPARSE AND LOCALISED. In that regime it keeps
+        the task while discarding 98 percent of the pixels and beats a fixed
+        crop by a wide margin.
+        Not defensible: that foveation is generally better than using the whole
+        sensor. On UCF-50 it is worse than doing nothing.
+
+A5.7  A CHEAP DIAGNOSTIC FALLS OUT OF THIS, and is probably the most portable
+      thing produced this week. The ratio of what a blindly-placed box catches
+      to what the fovea catches was 0.11 on DVS128 Gesture and 0.47 on UCF-50.
+      Small means the scene has a clear focus of activity and the fovea has
+      something to find; approaching one means activity is everywhere and there
+      is nothing to select. It costs nothing and can be run on any new dataset
+      before committing to the approach.
+
+A5.8  IMPORTANT LIMIT ON HOW FAR TO READ THIS. UCF-50 is not real video, it is a
+      screen recording of video. The saliency failure in A5.5 is caused by an
+      artifact of how the benchmark was built, so this is NOT evidence that the
+      fovea fails on real multi-object scenes, which remain untested. What it
+      does establish is the boundary condition, and that A4 must always be
+      quoted with A5 attached.
+      It also sharpens the dataset question: whichever human-action dataset is
+      chosen next must be a real recording rather than a screen capture, or it
+      will reproduce this failure for reasons that say nothing about the method.
+
+
+--------------------------------------------------------------------------------
+A6. CONVERTING DATASETS INTO TONIC                  tonic_convert.py
+--------------------------------------------------------------------------------
+A6.1  Tonic asks very little of a dataset: a length, indexing that returns
+      (events, target), events as a structured NumPy array with fields x, y, t,
+      p, and a sensor_size of (width, height, polarities). Match that and every
+      transform in tonic.transforms works, along with caching and DataLoader
+      collation. There is no registration step, and the download machinery can
+      be skipped entirely when the data is already local.
+
+A6.2  Built and verified: an EventDataset base implementing the contract with
+      loading left abstract, plus PokerDVSCards, DVSBenchmark (walking both the
+      flat VOT layout and the nested TrackingDataset one), and from_arrays as
+      the general escape hatch for any new format.
+
+A6.3  Confirmed working end to end: ToFrame, ToVoxelGrid, Denoise, Downsample,
+      Compose, and torch DataLoader with tonic.collation.PadTensors.
+
+A6.4  One trap worth knowing: targets must be numeric. PadTensors calls
+      torch.tensor on the target, which fails on strings.
+
+A6.5  It paid for itself immediately, by making the Denoise test in A2.4 a
+      one-line change rather than a filter to write.
+
+A6.6  Caveat for the supervisor: converting into Tonic is easy and worth doing
+      for every new dataset, but it does not make a dataset suitable. VOT is now
+      a perfectly well-formed Tonic dataset and still the wrong benchmark for
+      this method. Conversion is a plumbing win, not a scientific one.
+
+
+--------------------------------------------------------------------------------
+A7. CORRECTIONS MADE THIS WEEK
+--------------------------------------------------------------------------------
+Recorded because several changed a stated conclusion.
+
+A7.1  "The rule choice does not matter." Reversed. It was an artifact of testing
+      only at 50 ms; at 10 ms plain persistence wins at 4.8 standard errors.
+
+A7.2  "The full condition is byte-identical between the two windows." Wrong.
+      16 percent of its cells differ despite it cropping nothing, because events
+      are binned by the frame they fell in, so a different window moves some
+      between adjacent bins. The window touches every condition.
+
+A7.3  "TrackingDataset is real scenes rather than video on a monitor." Wrong.
+      All four parts of the benchmark were made by displaying video on a screen.
+      Verified: TrackingDataset shows the same 60 Hz peak at full power.
+
+A7.4  "A Gaussian mixture beats K-Means because it fits an ellipse." Wrong
+      mechanism. A spherical mixture, which has no ellipse at all, matches full
+      covariance and beats K-Means by the same margin. The advantage is soft
+      assignment with free mixing weights and per-component scale.
+
+A7.5  "Warm-starting is faster because EM needs fewer iterations." Wrong
+      mechanism. Iteration counts are essentially unchanged, 11.2 against 11.7.
+      Supplying explicit initial parameters makes scikit-learn skip its internal
+      k-means seeding, which is where nearly all the saving comes from.
+
+A7.6  Frame-length dwell peak. An early draft put it at 33 ms from a
+      six-recording sample; a stratified eight-recording sample puts it at 75 ms.
+      The ordering among 33, 50 and 75 ms is inside sampling noise and should
+      not be quoted. The warm-versus-cold gap is far outside it and should.
+
+A7.7  "The fovea keeps 2 percent of the sensor and beats using all of it." Now
+      withdrawn twice over. UCF-50 reversed it on a second dataset (A5.6), and
+      the official test set removed it on the original one (A9). What remains is
+      that the fovea MATCHES the full sensor using 2 percent of it.
+
+
+--------------------------------------------------------------------------------
+A8. HOW THE MODEL IS EVALUATED: THE TEST SET
+--------------------------------------------------------------------------------
+Worth stating plainly, because it is the first thing anyone should ask about an
+accuracy number.
+
+A8.1  DVS128 GESTURE. Everything comes from the dataset's TRAINING split, which
+      holds 1077 recordings from 23 people. That split was divided by person:
+      17 people for training, 6 held out for testing. 802 recordings train, 275
+      test. No person appears on both sides.
+
+A8.2  Splitting by person rather than by recording is the point. All 23 people
+      perform the same 11 gestures, so a random split would put the same
+      person's recordings on both sides and let the network identify the person
+      instead of the gesture. Accuracy would rise in every condition at once and
+      the comparison the experiment exists to make would be hidden.
+
+A8.3  THIS IS NOT THE OFFICIAL TEST SET. DVS128 Gesture ships a separate test
+      archive covering six further people who appear in no training recording,
+      and it was never downloaded. The protocol used here mirrors the official
+      one in structure, subject-independent with six people held out, but on
+      different people. Consequence: the absolute accuracies are NOT directly
+      comparable to published DVS128 Gesture numbers. Every conclusion drawn is
+      about the ordering between the five conditions, which is measured on one
+      identical test set and is unaffected by this.
+
+A8.4  UCF-50. 480 recordings, 12 classes, 40 clips each, spanning 25 groups.
+      Split by group: 19 groups train, 6 held out. 351 train, 129 test.
+
+A8.5  Groups matter for the same reason people do. UCF clips are named
+      v_BaseballPitch_g01_c01, where g01 marks several clips cut from one source
+      video. Clips from the same video share background, lighting and camera
+      angle, so a random split lets the network memorise the video rather than
+      learn the action.
+
+A8.6  Repeats. Every figure is the mean over several independent training runs
+      differing only in random seed: three seeds for the first pass, eight for
+      the DVS128 Gesture comparisons whose ordering was in question, five for
+      UCF-50. Differences are reported in standard errors of the difference so
+      it is visible which orderings are real and which are noise.
+
+
+--------------------------------------------------------------------------------
+A9. THE OFFICIAL TEST SET, AND THE CLAIM IT WITHDREW
+--------------------------------------------------------------------------------
+A9.1  The dataset's own test archive was downloaded and put in place: 264
+      recordings from subjects 24 to 29, 24 per class, none of whom appear in any
+      training recording. The protocol is now train on 1077 recordings from
+      subjects 1 to 23, test on those 264. This is what published DVS128 Gesture
+      numbers use, so ours are comparable for the first time.
+
+A9.2  RESULTS, five seeds, 10 ms window.
+
+        condition      improvised   OFFICIAL
+        full               0.709      0.855
+        persistence        0.731      0.845
+        persdens           0.708      0.812
+        centre             0.366      0.477
+        random             0.229      0.309
+
+A9.3  THE HEADLINE DID NOT REPLICATE.
+        improvised test set : persistence - full = +0.0223  (4.3 sigma)
+        official test set   : persistence - full = -0.0100  (1.3 sigma)
+      The fovea does not beat the full sensor. It matches it.
+
+A9.4  WHAT SURVIVES, AND FIRMLY.
+        persistence - centre    +0.368   45.6 sigma
+        persistence - persdens  +0.033    6.3 sigma
+      Placement is worth an enormous amount, and plain persistence remains the
+      rule to use. Both conclusions are stronger on the official protocol than
+      they were before.
+
+A9.5  WHY THE NUMBERS MOVED. Every condition gained about 0.13, because the
+      official protocol trains on all 1077 recordings rather than the 802 left
+      after carving out a test set, 34 percent more data. The likely reading is
+      that the fovea's apparent advantage was partly compensating for a
+      data-starved network: given enough examples the network learns to ignore
+      background itself. Testable by training the full condition on subsets, not
+      yet done.
+
+A9.6  THE METHODOLOGICAL LESSON, which is worth more than the number. Eight seeds
+      established that the result was stable against the network's random
+      initialisation, and that turned out to say nothing about whether it was
+      stable against a change of evaluation data. Seed stability is not
+      replication. A change-of-condition check should come before anything is
+      promoted to a headline.
+
+
+--------------------------------------------------------------------------------
+A10. THIS WEEK'S THREE POINTS
+--------------------------------------------------------------------------------
+A10.1 POINT 1, use VOT, relax the frame-rate constraint, focus on tracking.
+      DONE, NEGATIVE. A local tracker was written (tracker.py) which fits the
+      mixture only inside a search window around the previous box rather than to
+      the whole frame, and is initialised once from the benchmark's own first
+      annotation. Frame length was then swept freely.
+
+        configuration                 mean IoU   prec@20px
+        static box, never moves          0.119        34%
+        16.7 ms  = 60 Hz refresh         0.120        28%
+        33.3 ms  = 30 fps video          0.126        28%
+        50 ms                            0.136        28%
+        best found (alpha 0.3)           0.139        31%
+
+      The static-box control is the finding. Every configuration lands within
+      noise of a box that never moves, and loses to it on precision. Frame rate
+      is not the binding constraint and relaxing it changes nothing.
+
+A10.2 A FACTUAL POINT TO RAISE WITH HIM. There is no 60 fps footage in this
+      dataset. The paper states every tracking and action recording was displayed
+      at 30 fps, and the filenames say so too. The 60 Hz figure is the monitor's
+      refresh rate, not the content's frame rate. Sampling at exactly one refresh
+      period was tested anyway and scored 0.120 against the static box's 0.119.
+
+A10.3 WHAT WOULD BE NEEDED. The blocker is spatial, not temporal. VOT targets
+      occupy 0.2 to 8 percent of the frame while a three-component mixture over
+      the whole frame produces components covering roughly a third each, which is
+      the oracle IoU of 0.1 in A2.2. Local search fixes that in principle and
+      still does not track, which points at the model rather than its settings.
+      Matching a specific target needs an appearance model, not a density
+      estimate of where events are. That is a different method and worth an
+      explicit decision rather than drifting into it.
+
+A10.4 POINT 2, evaluate against benchmark ground truth, not a classifier.
+      DONE. tracker.py and evaluate.py score only against the benchmark's own
+      annotations: intersection over union per frame, success at a 0.5 threshold,
+      area under the success curve, centre error, and precision at 20 pixels. No
+      classifier appears anywhere in that path.
+      Two things came out of doing it properly.
+        - The 60 Hz diagnosis was overstated, corrected in A2.3. The refresh
+          modulation is 1.13 to 1.78 times the mean, not dominant, and targets
+          are 1.3 to 2.5 times denser than the scene average (17.6 times for the
+          small fast ball in ball1). The targets are not invisible.
+        - VOT annotations are rotated quadrilaterals and we score against their
+          axis-aligned bounding box, which inflates the annotated area by 1.34
+          times on average and caps a perfect tracker at about 0.75 overlap,
+          worse on rotated targets (gymnastics3 caps at 0.56). A real handicap,
+          though nowhere near enough to explain 0.13 against 0.5.
+
+A10.5 POINT 3, use the official test set. DONE, see A9. It withdrew the project's
+      headline claim, which is the strongest argument for his having insisted on
+      it.
+
+
+--------------------------------------------------------------------------------
+A11. RELATIVE OVERLAP, AND THE APPEARANCE MODEL     evaluate.py, snn_tracker.py
+--------------------------------------------------------------------------------
+A11.1 THE SUPERVISOR'S POINT WAS CORRECT AND THE CEILING WAS WORSE THAN RECORDED.
+      Scoring an upright fixed-area box against a rotated quadrilateral caps a
+      perfect tracker below 1.0, so overlap should be divided by the achievable
+      maximum. Implemented against the true quads rather than their bounding
+      boxes, so it removes the axis-alignment handicap and the fixed-size one
+      together. Mean achievable ceiling on VOT is 0.588, not the 0.75 recorded
+      in A10.4, because freezing the box size costs more than the rotation does.
+
+A11.2 17 OF 60 VOT SEQUENCES HAVE A CEILING BELOW 0.50, eight below 0.40. The
+      standard success-at-0.5 threshold is unreachable on 28 percent of the
+      benchmark for any tracker at all. TrackingDataset is much easier
+      geometrically, 0.736 mean with 5 of 67 below 0.5, which accounts for part
+      of the gap between the two halves.
+
+A11.3 IT DOES NOT CHANGE THE RESULT, AND COULD NOT HAVE. The tracker and the
+      static box are both upright boxes frozen at the same first-frame size, so
+      they share a per-frame ceiling and dividing both by it cannot separate
+      them. Static 0.136 becomes 0.237, tracker 0.081 becomes 0.143, and the
+      gap widens. What changes is legibility: 14 percent of achievable against
+      24 percent, rather than a bare 0.081.
+
+A11.4 A SCORING FAULT, FIXED. 15 of 67 TrackingDataset sequences mark an absent
+      or fully occluded target with NaN annotation rows, and Other/drunk2 is
+      more than half absent. Those frames were scored as misses rather than
+      excluded. VOT has none, so only TrackingDataset numbers were affected, and
+      both methods took the same hit.
+
+A11.5 THE TRACKING FAILURE IS NOW ISOLATED, and this is the most useful thing in
+      this section. The box was assumed to be nearly stationary; it is not, it
+      travels 1.02 times as far as the target. Direction coherence, the cosine
+      between the box's step and the target's, says what is actually wrong:
+
+        the target's own step-to-step coherence      0.667
+        local tracker                                0.022
+
+      The targets move smoothly and predictably and the tracker recovers three
+      percent of that. The problem was never following. It is identity.
+
+A11.6 FOUR SELECTION RULES AND A CONSTANT-VELOCITY MODEL WERE TRIED AND ALL LOST,
+      over the full 60 sequences. Every one moves the box further and scores
+      lower, persistence among the worst. Any rule that selects on where activity
+      is concentrated fails here, because the target holds a fifth of it.
+
+A11.7 AN APPEARANCE MODEL, BUILT AS A SPIKING NETWORK. A leaky integrate-and-fire
+      neuron per pixel produces a membrane surface, which is both the standard
+      event-camera time surface and the persistence integrator applied per pixel
+      instead of per component, so it carries no dependence on k. The template is
+      that surface inside the first annotation; matching is normalised
+      cross-correlation, the normalisation being what separates it from a density
+      measure; an snntorch LIF layer accumulates match evidence so the box moves
+      only when a neuron spikes.
+
+A11.8 APPEARANCE DOES CARRY IDENTITY, WHICH WAS NOT OBVIOUS.
+
+        template source            ncc at truth   rank of truth
+        the same frame                   0.969            0.8%
+        the previous frame               0.796            5.6%
+        frame zero                       0.033           45.8%
+
+      A template one frame old ranks the target in the top six percent of
+      candidate positions. A frame-zero template ranks it at chance, so event
+      appearance goes stale within a sequence. The first row is the control that
+      verifies the geometry.
+
+A11.9 IT STILL DOES NOT TRACK, over all 60 sequences:
+
+        configuration          raw IoU   relative    dir   wins
+        static box               0.136      0.237      -   0/60
+        density tracker          0.081      0.143  0.022  17/60
+        snn appearance           0.084      0.141  0.064   4/60
+        snn + anchor 0.3         0.078      0.126  0.028   7/60
+
+      The appearance model matches the density tracker while nearly tripling
+      direction coherence, so it is extracting real directional signal where the
+      density rules extracted none. It is still 0.064 of an available 0.667, and
+      a box that never moves beats both. Anchored templates and confidence-gated
+      updates were tried and ruled out.
+
+A11.10 WHY IT FAILS, PRECISELY. The 5.6 percent ranking was measured with the
+      template positioned by ground truth every frame. A tracker bootstraps from
+      its own estimate, so once the box slips it learns the background and then
+      searches for it, and the error compounds. The information is present in the
+      data; what fails is acquiring it without already knowing the answer.
+
+A11.11 WHAT THIS LICENSES, and it is narrower and firmer than before. Density
+      estimation cannot identify a target on this benchmark, evidenced at 0.667
+      against 0.03. Appearance carries identity at one frame, 0.796. What is not
+      solved is bootstrapping an appearance model from a tracker's own estimates,
+      on a benchmark whose ceiling is 0.588 and where a third of sequences cannot
+      reach the standard threshold. That is a bounded negative result rather than
+      a bare one, and it is a different claim from "the method does not track".
+
+A11.12 A FOURTH SMALL-SAMPLE INVERSION. On 10 sequences the appearance tracker
+      looked clearly worse than the density tracker, 0.062 against 0.085; on 60
+      it is ahead, 0.084 against 0.081. Same pattern as A5 and A9. The rule that
+      partial runs here are actively misleading has now held four times.
+
+A11.13 PIPELINE FAULTS FOUND BY AUDIT AND FIXED. Every classifier accuracy was
+      the best test accuracy over 40 epochs, which selects the checkpoint on the
+      test set; epoch selection now uses a validation split from the training
+      subjects. The centre and random controls were sized from the persdens
+      boxes although the headline comparison is persistence against centre, so
+      they were about a fifth too small in area; crops rebuilt. Notebook 05 had
+      section 6 before section 5 and referenced a deleted section 4. Notebooks 05
+      and 06 were stored with outputs. The project is now under version control.
+
+A11.15 THE CLASSIFIER, RE-RUN HONESTLY. Four configurations, because moving epoch
+      selection onto a validation split also removes 176 recordings from
+      training and the two effects had to be separated:
+
+        training  epoch selection        full   persistence   pers - full
+          1077    max-over-test (old)   0.875     0.846        -0.029  5.8 se
+          1077    final epoch           0.861     0.837        -0.024
+           901    final epoch           0.824     0.786        -0.038
+           901    validation-chosen     0.817     0.761        -0.055  4.0 se
+
+      THE FOVEA LOSES TO THE FULL SENSOR IN EVERY CONFIGURATION. A9.3's "it
+      matches it" is withdrawn. Roughly half the deepening is the smaller
+      training set and the rest is honest epoch selection. This is the fourth
+      successive tightening of protocol to move that comparison the same way,
+      and the reasonable conclusion is that the effect was never there.
+
+A11.16 A CLAIM THAT SURVIVED AFTER BRIEFLY APPEARING TO FALL. Plain persistence
+      against persistence-per-area measured -0.013 at 1.5 se on the
+      901-recording run and was written off. On the full 1077 it is +0.0333 at
+      4.3 se, reproducing the +0.033 in A9.4. A9.4 stands. The lesson is that a
+      reduced training set can invert a result exactly as a reduced sample can,
+      and that neither is a safe basis for withdrawing one.
+
+A11.17 PLACEMENT, AGAINST A CONTROL THAT IS FINALLY THE RIGHT SIZE. Persistence
+      minus centre is +0.3174 at 38.2 se. The corrected control is genuinely
+      stronger than the old one, 0.529 against 0.477, as expected from a box a
+      fifth larger in area, and the result survives it comfortably. This is the
+      only headline the project has that has never moved in any direction under
+      any change of protocol, and the report should lead with it.
+
+      Caveat on cross-referencing older numbers: these runs used MPS where the
+      recorded ones used CPU, and reproducing the old protocol gives a full
+      condition of 0.875 against the 0.855 on record. Comparisons within this
+      set are sound; against the older record they are not exact.
+
+A11.14 STILL TO DO, from a note that existed only in notebook 06: the
+      "100-50-25-10 progression on sensor size", and the dataset suggestions
+      "SL animals, DVS-lips". The latter are candidate answers to the standing
+      need for a real recording rather than a screen capture.
+
+
+--------------------------------------------------------------------------------
+A12. HOW MUCH TO KEEP, AND THE DIAGNOSTIC TESTED ON OUTCOMES
+--------------------------------------------------------------------------------
+A12.1 THE SWEEP THE SUPERVISOR ASKED FOR, run two ways at each fraction: a box of
+      that area centred on the fovea, and the same box centred on the sensor.
+      They must converge at 100 percent, which makes that point a check rather
+      than a result. DVS128 Gesture, 5 seeds, final epoch:
+
+        kept (achieved)   fovea   centre     gap
+             3.0%         0.779   0.472   +0.301  51.6 se
+             9.9%         0.817   0.655   +0.156  25.1 se
+            23.7%         0.869   0.746   +0.119  16.2 se
+            43.6%         0.889   0.843   +0.042   6.0 se
+            59.5%         0.868   0.849   +0.015   1.5 se
+           100.0%         0.861   0.861       -
+
+      The placement premium is monotone in how hard the crop is and vanishes at
+      the full frame. Note the achieved fractions: a large fovea box is clipped
+      at the frame edge, so nominal 75 and 50 percent achieve 0.595 and 0.436.
+      Figures must plot achieved, not nominal, or the fovea is credited with
+      data it does not have.
+
+A12.2 AND IT REVERSES A9.3 AND A11.15. Against the full sensor: fov50 at 43.6
+      percent BEATS it by +0.022 at 6.1 se, fov25 at 23.7 percent matches it at
+      0.3 se, and only below about 10 percent does the fovea lose. "The fovea
+      loses to the full sensor" was a statement about a 3 percent crop, which
+      the sweep independently confirms loses at 20.1 se. The useful range starts
+      near 20 percent and this project had been operating an order of magnitude
+      past it since A4.
+
+A12.3 THE PEAK'S LOCATION IS NOT ESTABLISHED, THOUGH THE RESULT IS. fov50 is
+      only about 3 se above its neighbours fov25 and fov75, so quote the range
+      rather than the optimum. The margin over the full sensor was then verified
+      on ten seeds, seeds 5 to 9 run separately and pooled: +0.0220 (6.1 se) on
+      seeds 0-4, +0.0390 (6.7 se) on 5-9, +0.0305 at 7.4 se pooled. It held
+      where A12.7's recentred did not, which is the reason for trusting it.
+
+A12.4 TWO NEW DATASETS, BOTH REAL RECORDINGS, which is what UCF-50 never was.
+      SL-Animals-DVS: 1121 samples sliced from 59 continuous takes by tag files
+      indexed by EVENT INDEX, 19 signs, 59 subjects, four lighting scenarios,
+      held out by subject. DVS-Lip: word-level lip reading with an official
+      subject-disjoint split, subsampled to 20 words. DVS-Lip carries a
+      limitation found on inspection: its samples are already cropped to the
+      mouth at 128x128 from a 346x260 sensor, so the localisation problem is
+      solved before the data arrives, exactly as with Tonic's POKER-DVS in A3.1.
+
+A12.5 THE SEVEN-CONDITION COMPARISON, 5 seeds, final epoch:
+
+        condition      SL-Animals   DVS-Lip
+        full             0.795       0.516
+        centre           0.467       0.492
+        persist2x        0.617       0.375
+        recentred        0.675       0.349
+        random           0.249       0.354
+        persistence      0.522       0.334
+        persdens         0.497       0.200
+
+      On DVS-Lip the fovea loses to the fixed centre crop by 0.143 at 12.8 se
+      and is indistinguishable from a RANDOM box, 0.334 against 0.354 at 0.4 se.
+      Where the subject already fills the frame, saliency contributes nothing.
+      Read DVS-Lip's ordering rather than its accuracies: full reaches only
+      0.516 on 20 words against a chance of 0.05.
+
+A12.6 THE DIAGNOSTIC, TESTED ON WHAT IT CLAIMS RATHER THAN ON ITSELF. The ratio
+      was always an intermediate quantity; the claim is about task outcome:
+
+        dataset          ratio    persistence - centre
+        DVS128 Gesture   0.192          +0.326
+        SL-Animals       0.550          +0.059
+        UCF-50           0.592          -0.063
+        DVS-Lip          0.627          -0.143
+
+      MONOTONE ACROSS FOUR DATASETS, with the premium changing sign as the ratio
+      rises. DVS-Lip is a forward prediction: measured, written into
+      PREDICTIONS.txt, then confirmed by the classifier. This supersedes A5.7 as
+      the strongest thing the project has, and it is now supported by outcomes on
+      four datasets rather than an observation on two.
+
+A12.7 A11.17'S RECENTRED RESULT DID NOT SURVIVE. It beat the full sensor on
+      gestures by +0.0133 at 2.9 se over ten seeds; it loses on SL-Animals by
+      0.1123 at 11.3 se and on DVS-Lip by 0.1680 at 14.2 se. Re-centring helps
+      only where the fovea is reliably on the subject. Not a general mechanism,
+      and not a route to a positive headline.
+
+A12.8 WHAT THE PROJECT NOW CLAIMS. Not that foveation works, and not that it
+      fails. That a ten-minute measurement taken before any training predicts
+      which of the two a dataset will give, verified on four datasets with one
+      prediction registered in advance; and that where a fovea is worth using,
+      roughly a quarter of the sensor matches using all of it while three
+      percent does not.
+
+
+--------------------------------------------------------------------------------
+A13. THE ABLATION THAT REMOVED THE TITLE
+--------------------------------------------------------------------------------
+A13.1 AN EXTERNAL REVIEW OF THE DRAFT REPORT FOUND THAT NOTHING ISOLATED
+      PERSISTENCE. The comparison had always been fovea against fixed crop
+      against random crop, which shows only that a placed crop beats an unplaced
+      one. The plain mixing-weight rule was listed in the method as available and
+      had never been run. It was run.
+
+A13.2 PERSISTENCE BUYS NOTHING, on a 2x2 of instantaneous against accumulated,
+      crossed with raw weight against weight per unit area:
+
+                         raw weight   per unit area
+          instantaneous     0.851         0.808
+          accumulated       0.839         0.805
+
+      size - persistence is +0.013 at 1.8 se on DVS128 Gesture and +0.022 at
+      2.2 se on UCF-50: same direction on both, past the threshold on one. The
+      factor that matters is raw weight against per-area, worth about 0.045.
+      Accumulation, which the method is named after, is worth nothing.
+
+A13.3 THE TITLE, THE ABSTRACT AND THE MECHANISM CLAIM ARE WITHDRAWN. Warm-
+      starting survives only in the narrower form that hysteresis needs component
+      identity to persist, which is true of every rule. A1.2 and B5.2 remain
+      correct about identity and dwell; what is withdrawn is that any of it
+      translates into task accuracy through persistence.
+
+A13.4 UCF-50 RE-RUN UNDER THE COMMON PROTOCOL, and it is worse than A5.4
+      recorded. Centre rises to 0.640, random to 0.541, persistence falls to
+      0.499. Every fovea rule now loses to a randomly placed box, persistence by
+      2.8 se. A5.4's "still clears a random box by 6.9 standard errors, so it is
+      finding something" is false. The cause of the discrepancy was a duplicated
+      reduction loop in build_crops_ucf.py that had drifted from the shared one;
+      it now delegates, so the columns are identical by construction.
+
+A13.5 THE DIAGNOSTIC SURVIVES AND n IS NOW FOUR ON EQUAL FOOTING: ratios 0.192,
+      0.550, 0.592 and 0.627 against premiums +0.303, +0.059, -0.131 and -0.143.
+      Monotone, all four measured the same way.
+
+A13.6 WHAT THE PROJECT NOW CLAIMS. The method is: fit a three-component Gaussian
+      mixture per frame, crop to the heaviest component. What survives is not a
+      mechanism but a set of measurements about it. Placement is worth +0.316 at
+      35.6 se against a matched centre crop on a localised scene. The operating
+      range is roughly a quarter of the sensor to match the full one. Whether any
+      of it is worth doing is predicted in advance by the blind-box ratio. This
+      is a measurement paper.
+
+
+--------------------------------------------------------------------------------
+A14. THE PERIPHERY, AND THE FIRST POSITIVE RESULT
+--------------------------------------------------------------------------------
+A14.1 GRUEL'S CENTRAL CLAIM, TESTED AT LAST. Keeping a reduced periphery rather
+      than discarding it, on an identical value budget: the fovea crop into the
+      top half of the tensor, the whole sensor downsampled into the bottom half.
+      16384 values either way, so the comparison is about how the budget is
+      divided rather than how large it is.
+
+A14.2 IT BEATS EVERY OTHER CONDITION.
+
+        condition     accuracy   seed spread
+        fovperiph      0.884        0.006
+        full           0.861        0.007
+        size           0.851        0.015
+        persistence    0.839        0.007
+        centre         0.530        0.013
+
+      +0.023 over the full sensor, +0.033 over the best crop-only rule, +0.044
+      over the accumulated one, all clear of the 0.02 threshold.
+
+A14.3 THIS REFRAMES A12 AND A13. The crop-only conditions do not trail the full
+      sensor because placement is wrong; placement is worth +0.316 and that
+      stands. They trail because discarding the periphery is the mistake. The
+      sweep in A12.1 measured how much to keep in ONE region; A14 shows that
+      splitting the budget across two resolutions beats any single-region
+      allocation tested.
+
+A14.4 IT IS ALSO THE PROJECT'S FIRST POSITIVE RESULT THAT CONFIRMS PRIOR WORK
+      RATHER THAN CORRECTING IT, and it does so under a stricter control than
+      the original, since the value count is held identical across conditions.
+
+A14.5 NOT YET A HEADLINE. One dataset, five seeds, and a 0.014 swing between
+      seed batches has already been seen on the full condition. The +0.023 over
+      full needs ten seeds and a second dataset before it is quoted as a
+      headline; the margins over the crop-only conditions are safer.
+
+
+================================================================================
+PART B - EARLIER WORK
+================================================================================
+
+--------------------------------------------------------------------------------
+B1. DATASET AND INFRASTRUCTURE
+--------------------------------------------------------------------------------
+B1.1  Tonic's DVS128 Gesture download fails: the figshare URL sits behind an AWS
+      WAF bot challenge that returns HTTP 202 with a zero-length body, so the
+      MD5 check fails and surfaces as "File not found or corrupted". A browser
+      user-agent gets the same 202, so it cannot be worked around from the
+      command line.
+
+B1.2  After manual download, two further fixes. The recordings must live at
+      data/DVSGesture/ibmGestureTrain/ because tonic derives the path from the
+      class name. And tonic demands the original .tar.gz sit beside them even
+      though only the .npy files are read, so _is_file_present is patched.
+      Patched rather than subclassed: tonic builds the directory from
+      self.__class__.__name__, so a subclass silently looks in the wrong place.
+
+B1.3  Working set: 1077 recordings, 11 classes, 23 subjects, 5 lighting
+      conditions, 128x128 sensor, about 12 GB extracted.
+
+B1.4  The project now lives at ~/Developer/Research and the environment is
+      Python 3.13 with scikit-learn 1.9. Transient overflow warnings appear
+      during EM under this version; no fitted parameters are corrupted.
+
+
+--------------------------------------------------------------------------------
+B2. NOTEBOOK 01, FRAME CLUSTERING AND SALIENCY
+--------------------------------------------------------------------------------
+B2.1  Frames sliced at a fixed window; clustering behind one argument supporting
+      K-Means, Gaussian mixture and agglomerative.
+
+B2.2  The fovea box is the 5th-to-95th percentile rectangle rather than the raw
+      minimum and maximum, which brought it from roughly a third of the sensor
+      to about 4 percent.
+
+B2.3  WITHIN-FRAME PERSISTENCE CANNOT WORK. Over a 50 ms window every cluster is
+      active for the whole window, so the score saturates at 1.0 and cannot rank
+      anything. This negative result is what motivates notebooks 02 and 03.
+
+B2.4  Size and density agree on about 92 percent of frames.
+
+B2.5  Section 6 of that notebook is superseded for the frame length by A1, and
+      says so in the text.
+
+
+--------------------------------------------------------------------------------
+B3. MULTI-RECORDING VALIDATION
+--------------------------------------------------------------------------------
+B3.1  Re-run across 33 recordings spanning all 11 classes, 17 subjects and all 5
+      lighting conditions, after everything had first been measured on one.
+
+B3.2  GAUSSIAN MIXTURE ADOPTED over K-Means. The original comparison used the
+      event count of the salient cluster, which says nothing about how tightly
+      the box sits. Measured on capture against box area:
+
+        method          k   capture   box frac   concentration   sec/frame
+        kmeans          3     0.54      0.042        12.8         0.0224
+        gmm             3     0.53      0.024        21.8         0.0113
+        agglomerative   3     0.58      0.045        13.0         0.0396
+
+B3.3  Fixed k kept over silhouette-chosen k: auto-k costs 12.1x more compute,
+      picks k=2 on 54 percent of frames, and at roughly 700 ms per 50 ms frame
+      is about 14x too slow to run live.
+
+
+--------------------------------------------------------------------------------
+B4. NOTEBOOK 02, TRACKING
+--------------------------------------------------------------------------------
+B4.1  Top three clusters per frame as detections, associated with the Hungarian
+      algorithm on centre distance behind a 30 px gate, smoothed with an
+      exponential moving average, with a track lifecycle confirming after 3 hits
+      and dropping after 5 misses.
+
+B4.2  Persistence realised as track lifetime, the first working version of the
+      measure B2.3 had to abandon.
+
+        selection                  mean jump   p95   >30px   capture   switches
+        raw per-frame box              10.8   28.1    7.4%     0.53        -
+        tracked, most hits              5.6   21.9    5.4%     0.46      13.8%
+        tracked, sticky incumbent       1.8    3.8    0.2%     0.48       0.5%
+
+B4.3  A DEFECT THE HEADLINE METRIC WAS HIDING. Selecting by most hits improved
+      mean jump while changing fovea identity on 23 percent of frames, because a
+      box that sits still between occasional leaps scores well on a
+      frame-to-frame average. Two causes: rivals with near-equal hit counts
+      trading the top spot, and a track that missed a single frame being dropped
+      from the candidate list. Fixing both improved every metric at once.
+
+
+--------------------------------------------------------------------------------
+B5. NOTEBOOK 03, SALIENCY MAPS AND PERSISTENCE
+--------------------------------------------------------------------------------
+B5.1  A Gaussian mixture is already a continuous density over the image plane,
+      so the saliency map is the mixture itself rendered on the pixel grid:
+      S(x,y) = sum over components of persistence * N(x,y | mean, covariance).
+      Three variants: weighted by mixture weight, by persistence, and
+      accumulated over time.
+
+B5.2  WARM-STARTING THE MIXTURE. Fitting each frame from the previous frame's
+      parameters keeps component identity, which is what makes any accumulated
+      per-component measure possible. Component dwell went from 1.7 to 6.1
+      frames, index switching from 60.5 to 21 percent, and it is 2.5x faster.
+
+B5.3  Persistence defined as an accumulated quantity:
+      persistence <- decay * persistence + (1 - decay) * share of this frame's
+      events, with decay 0.85.
+
+B5.4  A numerical collapse fixed with a variance floor of 1 px^2, the sensor's
+      own quantisation. At the scikit-learn default a component collapsed to a
+      covariance determinant of 1e-8 and produced a density spike a thousand
+      times taller than any real structure.
+
+B5.5  Fovea dwell went from 0.08 s on the original per-frame baseline to 2.97 s,
+      with a longest unbroken lock of 4.28 s, about 70 percent of a recording.
+
+
+--------------------------------------------------------------------------------
+B6. DELIVERABLES, OPEN QUESTIONS AND SCOPE
+--------------------------------------------------------------------------------
+FILES
+  foveanet.py             shared module: loading, clustering, the percentile
+                          box, cluster scoring, PersistentGMM
+  evaluate.py             IoU, success curves, the oracle diagnostic, artifact
+                          spectrum
+  tonic_convert.py        EventDataset base, PokerDVSCards, DVSBenchmark,
+                          from_arrays
+  aedat.py                jAER AEDAT-2.0 reader for the POKER-DVS recordings
+  build_crops.py          five-way representations of DVS128 Gesture
+  build_crops_ucf.py      the same for UCF-50, written and validated, not yet run
+  classify.py             the classifier comparison
+  make_fovea_video.py     renders the fovea across a recording as MP4 or GIF
+
+  foveanet_01_frame_clustering_saliency.ipynb   21 cells
+  foveanet_02_tracking.ipynb                    16 cells
+  foveanet_03_saliency_persistence.ipynb        21 cells
+  foveanet_04_benchmarks.ipynb                  17 cells
+  foveanet_05_evaluation.ipynb                   8 cells
+
+  All notebooks run clean top to bottom, carry no comments inside code cells,
+  and are stored with outputs cleared.
+
+STILL OPEN
+  - A real multi-object scene. This is now the most important gap. The fovea
+    helps when activity is sparse and localised (A5.6) and the only counter-
+    example so far is a screen recording, whose failure mode is an artifact.
+    Whether it helps or hurts on genuine cluttered video is untested, and
+    choosing a dataset that is a real recording is the way to find out.
+  - Ground truth on a real scene. Still nothing has both: the DVS benchmark has
+    annotations but is a screen capture, POKER-DVS and DVS128 Gesture are real
+    but unannotated.
+  - The spiking classifier. Deliberately deferred so that A4 could isolate
+    whether the fovea preserves information from whether an SNN trains on it.
+    It now has a specific target to beat: 0.731 at a 10 ms window.
+  - Isolating why the fovea beats the full frame on gestures. Background removal
+    and temporal registration are both plausible and neither has been separated.
+    A re-centred but uncropped condition would do it, and is a small experiment.
+  - Per-pixel persistence, which would drop the dependence on k entirely.
+  - Whether the saliency stage becomes spiking. The persistence update is a
+    leaky integrator with a decay constant, which is what a spiking neuron's
+    membrane potential is. A1 sharpens the point: a genuinely spiking front end
+    would have no frame at all, and shorter frames working better is a hint in
+    that direction.
+
+SCOPE CAVEAT
+  Two datasets have now been measured and they disagree, which is the single
+  most important thing in this document. The fovea beats the full sensor on
+  DVS128 Gesture and loses to a fixed centre crop on UCF-50. A4 must not be
+  quoted without A5. The condition separating them is stated in A5.6 and can be
+  checked cheaply on any new dataset using the diagnostic in A5.7.
+
+================================================================================
+END
+================================================================================

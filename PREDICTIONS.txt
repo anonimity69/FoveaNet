@@ -1,0 +1,181 @@
+================================================================================
+PREDICTIONS REGISTERED BEFORE MEASUREMENT
+================================================================================
+
+The blind-box ratio is supposed to be a diagnostic: something you run on a new
+dataset before committing to the approach, that tells you whether a fovea will
+help. So far it has only ever been computed retrospectively, on the two datasets
+whose outcome was already known, which is not evidence that it predicts anything.
+
+This file exists so the predictions are on record before the measurements are
+taken. Anything written above a "MEASURED" line was written first.
+
+--------------------------------------------------------------------------------
+14 August 2026 - the diagnostic itself was wrong
+--------------------------------------------------------------------------------
+The 0.11 recorded for DVS128 Gesture and the 0.47 for UCF-50 were both computed
+in notebook 05 from the crops archive, in which the random control box was sized
+from the persdens boxes rather than the persistence ones and was therefore about
+a fifth too small in area. A smaller blind box catches fewer events and pushes
+the ratio down, so both figures are biased low by an unknown amount.
+
+Recomputed with blind_box.py, which sizes the blind box from the same rule whose
+fovea it is being compared against:
+
+    DVS128 Gesture   0.192   converged over 120 recordings (0.212, 0.202,
+                             0.195, 0.192 at 90, 100, 110, 120)
+                             previously recorded as 0.11
+
+The scale therefore has to be restated, and any threshold quoted in the report
+must come from the corrected tool rather than the notebook figures.
+
+--------------------------------------------------------------------------------
+PREDICTIONS, written before the runs finished
+--------------------------------------------------------------------------------
+
+UCF-50. Expect the ratio to land well above gesture's 0.192, because the
+recordings are video played on a monitor and the display refresh puts events
+across the whole frame. Previously recorded as 0.47 under the buggy sizing;
+since the correction raised gesture's figure by about 0.08, expect UCF-50 to
+land somewhere around 0.5 to 0.6. The ordering gesture < UCF-50 is the part that
+matters and should be unambiguous.
+
+DVS-LIP. Expect a HIGH ratio, comparable to or above UCF-50, and therefore a
+prediction that foveation will NOT help. The reason is not that the scene is
+busy but that the samples are already cropped: the DAVIS-346 recorded at
+346x260 and the released data is 128x128, tightly framed on the mouth. Activity
+should fill that crop, leaving a saliency mechanism nothing to select. If the
+ratio comes back low instead, the diagnostic is measuring something other than
+what it claims and this prediction is the evidence against it.
+
+SL-ANIMALS-DVS. Expect a LOW ratio, comparable to or below gesture's 0.192. A
+signer's hands are a small, fast, high-contrast region in an otherwise still
+frame recorded from a fixed camera, which is the regime the fovea was built for.
+
+WHY THESE TWO TOGETHER ARE WORTH THE TROUBLE. Both are real recordings rather
+than screen captures, so unlike UCF-50 a failure on DVS-Lip could not be blamed
+on a display artifact. If the diagnostic predicts failure on DVS-Lip and success
+on SL-Animals, and training confirms both, it stops being an observation about
+two datasets and becomes a tool that was tested before it was trusted. If it
+gets either one wrong, that is worth more to the report than another confirmation.
+
+--------------------------------------------------------------------------------
+MEASURED
+--------------------------------------------------------------------------------
+Nothing above this line was edited after the fact.
+
+    dataset          ratio    sd     fovea box   reading
+    DVS128 Gesture   0.192   0.305     7.4%      localised, fovea has a target
+    UCF-50           0.592   0.313    23.9%      spread out, fixed crop competes
+    DVS-Lip          0.627   0.326    26.1%      spread out, fixed crop competes
+    SL-Animals       0.550   0.349    17.4%      spread out, fixed crop competes
+                             PREDICTION WRONG
+
+UCF-50, PREDICTED 0.5 to 0.6, MEASURED 0.592. Correct, and the ordering
+gesture < UCF-50 is unambiguous as required. The corrected scale is therefore
+0.192 against 0.592, a wider and more usable separation than the 0.11 against
+0.47 it replaces.
+
+DVS-LIP, PREDICTED high and at or above UCF-50, MEASURED 0.627. Correct. It
+converged by 10 recordings and never moved, which is far more stable than
+gesture's, itself consistent with a scene that has no structure to find. The
+supporting number is the fovea box covering 26.1 percent of the frame against
+7.4 percent on gestures: with the crop already tight the mixture has nothing
+compact to lock onto and spreads out. That is what "nothing left to foveate"
+looks like in the model's own output rather than in the score.
+
+WHAT IS AND IS NOT ESTABLISHED BY THIS. The diagnostic predicted DVS-Lip
+correctly, in writing, before the run. That is one prospective success, not a
+validated tool. The prediction it makes is about the CLASSIFIER OUTCOME, and
+until the five-condition comparison is run on DVS-Lip and the fovea does in fact
+fail to beat a fixed crop, only the intermediate quantity has been confirmed.
+The classifier is the test that counts.
+
+SL-ANIMALS, PREDICTED at or below 0.192, MEASURED 0.550. WRONG, and this is the
+most useful measurement of the set.
+
+The reader was checked first, since a bad slice would raise the ratio for
+reasons having nothing to do with the scene. It is sound: tags cover 88 to 99
+percent of each recording's events, none overlap, none run past the end of the
+file, and 8 to 20 percent of the span is gaps between signs. The samples are
+what they claim to be.
+
+So the number is the data. Split by recording scenario it turns out not to be
+one number at all:
+
+    scenario   ratio   box%   events/frame   spread%
+    indoor     0.576   18.0      324.8         56.3
+    dc         0.452   16.5      157.2         53.2
+    imse       0.265    9.4      241.6         55.7
+    sunlight   0.248    9.9       70.2         33.2
+    (gesture)  0.175    6.7      301.1         51.3
+
+THE SAME NINETEEN SIGNS, BY THE SAME KIND OF SUBJECT, SCORE 0.248 TO 0.576
+DEPENDING ONLY ON HOW THE RECORDING WAS MADE. That is a factor of 2.3 within one
+dataset, and it spans the whole range between "the fovea works" and "a fixed
+crop wins". The sunlight and imse recordings sit near DVS128 Gesture; the indoor
+ones sit near UCF-50.
+
+Note also that the ordering is the opposite of the obvious guess. Sunlight
+recordings were expected to be noisy and score badly; they are the sparsest, at
+70 events per frame against indoor's 325, and they score best.
+
+WHAT THIS COSTS THE DIAGNOSTIC, stated plainly because it is a real limit:
+
+  - The ratio is a property of a RECORDING CONDITION, not of a dataset or a
+    task. Quoting one figure per dataset, as this project has been doing, hides
+    a range wide enough to reverse the conclusion.
+  - It cannot be predicted from a verbal description of a scene. "A signer's
+    hands in a still frame" sounded exactly like DVS128 Gesture and is not.
+    Any use of it as a planning tool has to involve running it.
+
+WHAT IT DOES NOT COST. The diagnostic still separated the two known outcomes
+cleanly and still predicted DVS-Lip correctly. And a diagnostic that only ever
+confirms what was already assumed would be doing no work: this one contradicted
+a confident prior, which is what a measurement is for. The honest claim is
+narrower than before and better supported: run it per recording condition, and
+do not guess it.
+
+--------------------------------------------------------------------------------
+THE OUTCOMES, WHICH ARE WHAT THE DIAGNOSTIC ACTUALLY CLAIMS
+--------------------------------------------------------------------------------
+The ratio was only ever an intermediate quantity. What it claims to predict is
+whether a fovea beats a fixed crop of the same size on the task. All four
+datasets have now been through the identical seven-condition comparison:
+
+    dataset          ratio    persistence - centre     full - persistence
+    DVS128 Gesture   0.192          +0.326                  +0.024
+    SL-Animals       0.550          +0.059                  +0.260
+    UCF-50           0.592          -0.063                  +0.172
+    DVS-Lip          0.627          -0.143                  +0.177
+
+MONOTONIC IN THE RATIO, ACROSS FOUR DATASETS. As the ratio rises the placement
+premium falls and then changes sign. DVS-Lip is the one that counts as a
+forward prediction: the ratio was measured and the failure written down here
+before the classifier was run.
+
+DVS-LIP IS THE EXTREME CASE AND WORTH QUOTING. The fovea does not merely lose
+to the centre crop by 0.143 at 12.8 se; at 0.334 against a random box's 0.354
+it is indistinguishable from throwing the box anywhere at all, 0.4 se. When the
+data is already cropped to the subject there is nothing left for saliency to
+select, and the mechanism contributes exactly nothing.
+
+A CAVEAT ON THE ABSOLUTE NUMBERS. DVS-Lip's full condition reaches only 0.516
+on 20 words against a chance of 0.05. Word-level lip reading is hard for a 71k
+parameter network on 32x32 input with eight bins. Read that dataset's ordering,
+not its accuracies.
+
+A SECOND CLAIM THIS KILLED. recentred beat the full sensor on gestures by
++0.013 at 2.9 se and looked like the one route back to a positive headline. On
+SL-Animals it LOSES to full by -0.112 at 11.3 se, and on DVS-Lip by -0.168 at
+14.2 se. Re-centring helps only where the fovea is reliably on the subject;
+where it is not, shifting the frame by it stabilises the wrong thing. The
+diagnostic predicts that too, which is the useful part.
+
+A DISTINCTION THE REPORT MUST KEEP. UCF-50 and DVS-Lip score alike but fail for
+different reasons. UCF-50 is a busy scene whose display refresh spreads events
+everywhere. DVS-Lip is a quiet scene already cropped so tightly that there is no
+periphery left to discard. The ratio detects both, which is a point in its
+favour, but "too much going on" and "nothing left to select" are not the same
+condition and should not be described as one.
+

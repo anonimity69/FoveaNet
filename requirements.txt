@@ -1,0 +1,11 @@
+# Direct dependencies pinned to the locally verified environment.
+numpy==1.26.4
+scipy==1.17.1
+scikit-learn==1.9.0
+tonic==1.6.0
+torch==2.13.0
+snntorch==1.0.0
+h5py==3.16.0
+matplotlib==3.11.1
+pillow==12.3.0
+imageio-ffmpeg==0.6.0

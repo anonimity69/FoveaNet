@@ -1,0 +1,14 @@
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+extend-exclude = ["data", ".venv"]
+
+[tool.ruff.lint]
+select = ["E9", "F", "I"]
+
+[tool.ruff.lint.per-file-ignores]
+"*.ipynb" = ["I001"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

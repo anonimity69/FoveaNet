@@ -1,0 +1,50 @@
+# Local datasets, crop tensors and checkpoints
+data/
+*.npz
+*.npy
+*.h5
+*.hdf5
+*.aedat
+*.pt
+*.pth
+*.ckpt
+
+# Python and notebook runtime files
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+*.egg-info/
+build/
+dist/
+
+# Machine settings and credentials
+.DS_Store
+._*
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+.claude/
+.codex/
+
+# Local authoring and temporary files
+node_modules/
+~$*
+*.tmp
+*.bak
+*.log
+*.aux
+*.out
+*.toc
+*.synctex.gz
+
+# Untracked generated animations; keep existing selected examples
+figures/*.gif
+figures/*.mp4
